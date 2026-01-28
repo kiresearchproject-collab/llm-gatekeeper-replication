@@ -4,8 +4,6 @@ STATISTICAL ANALYSIS - LLMs as the Gatekeeper
 This script performs all statistical analyses reported in the paper
 "LLMs as the Gatekeeper: Testing Persuasive Principles in AI Purchase Recommendations"
 
-All values are calculated from the raw data - no hardcoded values.
-
 USAGE:
     python statistical_analysis.py
 
