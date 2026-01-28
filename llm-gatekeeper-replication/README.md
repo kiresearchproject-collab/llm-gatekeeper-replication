@@ -6,7 +6,7 @@ Replication materials for "LLMs as the Gatekeeper: How Product Type Determines O
 
 This repository contains the experimental data, analysis code, and complete prompt templates used in the study examining how large language models respond to persuasive marketing techniques across different product types.
 
-**Key Finding:** Identical persuasive marketing content produces opposite effects depending on product type—amplifying recommendation certainty for hedonic products while reducing it for utilitarian products.
+**Key Finding:** Identical persuasive marketing content produces opposite effects depending on product type, amplifying recommendation certainty for hedonic products while reducing it for utilitarian products.
 
 ## Repository Structure
 
