@@ -38,7 +38,7 @@ def load_data(file_path):
     print("=" * 80)
     
     df = pd.read_csv(file_path)
-    print(f"\n📊 Dataset loaded: {len(df):,} observations")
+    print(f"\n Dataset loaded: {len(df):,} observations")
     
     # Show conditions
     print(f"\n   Conditions in dataset:")
@@ -54,7 +54,7 @@ def load_data(file_path):
     n_products = df['product_id'].nunique()
     n_models = df['model_clean'].nunique()
     
-    print(f"\n✅ Experimental design: {n_conditions}×{n_products}×{n_models} factorial")
+    print(f"\n Experimental design: {n_conditions}×{n_products}×{n_models} factorial")
     print(f"   Expected observations: {n_conditions * n_products * n_models * 150:,}")
     print(f"   Actual observations: {len(df):,}")
     
@@ -90,17 +90,17 @@ def verify_section_4_1(df):
     # N per condition
     n_per_condition = len(df) // n_conditions
     
-    print(f"\n📊 EXPERIMENTAL DESIGN:")
+    print(f"\n EXPERIMENTAL DESIGN:")
     print(f"   N total: {n_total:,}")
     print(f"   Design: {n_conditions}×{n_products}×{n_models} factorial")
     print(f"   Trials per cell: {int(trials_per_cell.mean())} (min: {trials_per_cell.min()}, max: {trials_per_cell.max()})")
     
-    print(f"\n📊 OVERALL STATISTICS:")
+    print(f"\n OVERALL STATISTICS:")
     print(f"   Mean certainty: {overall_mean:.2f}")
     print(f"   SD certainty: {overall_sd:.2f}")
     print(f"   n per condition: {n_per_condition:,}")
     
-    print(f"\n📊 VERIFICATION:")
+    print(f"\n VERIFICATION:")
     print(f"   {'Statistic':<25} {'Calculated':>12} {'Expected':>12} {'Match':>8}")
     print(f"   {'-'*60}")
     print(f"   {'N total':<25} {n_total:>12,} {13500:>12,} {'✓' if n_total == 13500 else '✗':>8}")
@@ -126,7 +126,7 @@ def verify_section_4_2(df):
     print("=" * 80)
     
     # --- MAIN ANOVA ---
-    print("\n📊 MAIN ANOVA (Effect of Condition):")
+    print("\n MAIN ANOVA (Effect of Condition):")
     
     groups = [df[df['influence_condition'] == cond]['certainty'].values 
               for cond in df['influence_condition'].unique()]
@@ -147,7 +147,7 @@ def verify_section_4_2(df):
     print(f"   η² = {eta_squared:.3f}")
     
     # --- BASELINE DIFFERENCES (Hedonic vs Utilitarian) ---
-    print("\n📊 BASELINE DIFFERENCES (control only):")
+    print("\n BASELINE DIFFERENCES (control only):")
     
     baseline_data = df[df['influence_condition'] == 'control']
     
@@ -173,7 +173,7 @@ def verify_section_4_2(df):
     print(f"   Cohen's d = {cohens_d_baseline:.3f}")
     
     # --- TREATMENT EFFECTS ---
-    print("\n📊 TREATMENT EFFECTS (vs control):")
+    print("\n TREATMENT EFFECTS (vs control):")
     
     baseline_all = df[df['influence_condition'] == 'control']['certainty']
     baseline_mean = baseline_all.mean()
@@ -245,7 +245,7 @@ def verify_section_4_3(df):
     print("=" * 80)
     
     # --- INTERACTION ANOVA ---
-    print("\n📊 INTERACTION TEST (Condition × Category):")
+    print("\n INTERACTION TEST (Condition × Category):")
     
     import statsmodels.formula.api as smf
     from statsmodels.stats.anova import anova_lm
@@ -267,7 +267,7 @@ def verify_section_4_3(df):
     print(f"   p < 0.001" if p_interaction < 0.001 else f"   p = {p_interaction:.6f}")
     
     # --- EFFECTS BY CATEGORY ---
-    print("\n📊 EFFECTS BY PRODUCT CATEGORY:")
+    print("\n EFFECTS BY PRODUCT CATEGORY:")
     
     treatments = ['authority', 'social_proof', 'scarcity', 'reciprocity']
     baseline_data = df[df['influence_condition'] == 'control']
@@ -330,7 +330,7 @@ def verify_section_4_4(df):
     print("=" * 80)
     
     # --- BASELINE BY MODEL ---
-    print("\n📊 BASELINE CERTAINTY BY MODEL (control only):")
+    print("\n BASELINE CERTAINTY BY MODEL (control only):")
     
     baseline_data = df[df['influence_condition'] == 'control']
     
@@ -379,7 +379,7 @@ def verify_section_4_5(df):
     import statsmodels.formula.api as smf
     
     # --- FOCUSED MODEL (Condition × Category only) ---
-    print("\n📊 FOCUSED MODEL (Condition × Category):")
+    print("\n FOCUSED MODEL (Condition × Category):")
     
     formula_focused = """certainty ~ C(influence_condition, Treatment('control')) * 
                                       C(category, Treatment('utilitarian'))"""
@@ -393,7 +393,7 @@ def verify_section_4_5(df):
     print(f"   F = {f_focused:.3f}")
     
     # --- FULL MODEL (including LLM) ---
-    print("\n📊 FULL MODEL (including LLM):")
+    print("\n FULL MODEL (including LLM):")
     
     formula_full = """certainty ~ C(influence_condition, Treatment('control')) * 
                                    C(category, Treatment('utilitarian')) + 
@@ -408,7 +408,7 @@ def verify_section_4_5(df):
     print(f"   F = {f_full:.3f}")
     
     # --- INTERACTION COEFFICIENTS ---
-    print("\n📊 INTERACTION COEFFICIENTS (Condition × Hedonic):")
+    print("\n INTERACTION COEFFICIENTS (Condition × Hedonic):")
     
     treatments = ['authority', 'social_proof', 'scarcity', 'reciprocity']
     
@@ -443,7 +443,7 @@ def verify_section_4_6(df):
     print("=" * 80)
     
     # --- BASELINE RATES BY PRODUCT ---
-    print("\n📊 BASELINE HIGH-CERTAINTY RATES (≥8.5):")
+    print("\n BASELINE HIGH-CERTAINTY RATES (≥8.5):")
     
     baseline_data = df[df['influence_condition'] == 'control']
     
@@ -467,7 +467,7 @@ def verify_section_4_6(df):
         print(f"   {product:<25} {category:<12} {rate:>10.1%} {n:>8}")
     
     # --- CONCERT TICKETS + SOCIAL PROOF ---
-    print("\n📊 CONCERT TICKETS + SOCIAL PROOF (dramatic effect):")
+    print("\n CONCERT TICKETS + SOCIAL PROOF (dramatic effect):")
     
     concert_baseline = baseline_data[baseline_data['product_id'] == 'concert_tickets']
     concert_social = df[(df['influence_condition'] == 'social_proof') & 
@@ -501,7 +501,7 @@ def verify_section_4_7(df):
     baseline_data = df[df['influence_condition'] == 'control']
     
     # --- BASELINE BY CATEGORY ---
-    print("\n📊 BASELINE HIGH-CERTAINTY RATES (≥8.5) BY CATEGORY:")
+    print("\n BASELINE HIGH-CERTAINTY RATES (≥8.5) BY CATEGORY:")
     
     hedonic_baseline = baseline_data[baseline_data['category'] == 'hedonic']
     util_baseline = baseline_data[baseline_data['category'] == 'utilitarian']
@@ -516,7 +516,7 @@ def verify_section_4_7(df):
     print(f"   Overall: {overall_rate:.1%}")
     
     # --- SOCIAL PROOF EFFECT ON HEDONIC ---
-    print("\n📊 SOCIAL PROOF EFFECT ON HEDONIC (threshold):")
+    print("\n SOCIAL PROOF EFFECT ON HEDONIC (threshold):")
     
     hedonic_social = df[(df['influence_condition'] == 'social_proof') & 
                         (df['category'] == 'hedonic')]
@@ -545,7 +545,7 @@ def generate_summary_table(df):
     print("SUMMARY STATISTICS TABLE")
     print("=" * 80)
     
-    print("\n📊 BY CONDITION:")
+    print("\n BY CONDITION:")
     print(f"\n   {'Condition':<15} {'N':>8} {'Mean':>8} {'SD':>8} {'Rec Rate':>10}")
     print(f"   {'-'*55}")
     
@@ -557,7 +557,7 @@ def generate_summary_table(df):
         rec_rate = cond_data['recommendation'].mean()
         print(f"   {condition:<15} {n:>8} {mean:>8.2f} {sd:>8.2f} {rec_rate:>10.1%}")
     
-    print("\n📊 BY MODEL:")
+    print("\n BY MODEL:")
     print(f"\n   {'Model':<20} {'N':>8} {'Mean':>8} {'SD':>8} {'Rec Rate':>10}")
     print(f"   {'-'*60}")
     
@@ -569,7 +569,7 @@ def generate_summary_table(df):
         rec_rate = model_data['recommendation'].mean()
         print(f"   {model:<20} {n:>8} {mean:>8.2f} {sd:>8.2f} {rec_rate:>10.1%}")
     
-    print("\n📊 BY CATEGORY:")
+    print("\n BY CATEGORY:")
     print(f"\n   {'Category':<15} {'N':>8} {'Mean':>8} {'SD':>8} {'Rec Rate':>10}")
     print(f"   {'-'*55}")
     
