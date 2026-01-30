@@ -14,6 +14,7 @@ import time
 import pickle
 import glob
 import re
+import shutil
 
 # Configure logging
 logging.basicConfig(
@@ -60,16 +61,169 @@ class TrialResult:
     response_text: str
     reasoning_length: int
     timestamp: datetime
+
+
+def check_existing_data(output_dir: str) -> Optional[Dict]:
+    """Check for existing checkpoint data and return info about it"""
+    
+    checkpoint_pattern = f"{output_dir}/results_raw_*_checkpoint_*.pkl"
+    final_pattern = f"{output_dir}/results_raw_*_final*.pkl"
+    
+    checkpoint_files = glob.glob(checkpoint_pattern)
+    final_files = glob.glob(final_pattern)
+    
+    all_files = checkpoint_files + final_files
+    
+    if not all_files:
+        return None
+    
+    # Get the most recent file
+    latest_file = max(all_files, key=lambda x: os.path.getmtime(x))
+    file_date = datetime.fromtimestamp(os.path.getmtime(latest_file))
+    
+    # Try to load and count trials
+    try:
+        with open(latest_file, 'rb') as f:
+            data = pickle.load(f)
+        
+        if isinstance(data, list):
+            n_trials = len(data)
+        else:
+            n_trials = data.get('completed_trials', len(data.get('results', [])))
+    except:
+        n_trials = "unknown"
+    
+    # Count all data files
+    all_pkl = glob.glob(f"{output_dir}/*.pkl")
+    all_csv = glob.glob(f"{output_dir}/*.csv")
+    all_json = glob.glob(f"{output_dir}/*.json")
+    
+    return {
+        'latest_file': latest_file,
+        'file_date': file_date,
+        'n_trials': n_trials,
+        'n_checkpoints': len(checkpoint_files),
+        'n_finals': len(final_files),
+        'total_pkl': len(all_pkl),
+        'total_csv': len(all_csv),
+        'total_json': len(all_json),
+        'days_ago': (datetime.now() - file_date).days
+    }
+
+
+def handle_existing_data(output_dir: str) -> str:
+    """
+    Check for existing data and prompt user for action.
+    Returns: 'continue', 'new', or 'quit'
+    """
+    
+    existing = check_existing_data(output_dir)
+    
+    if not existing:
+        print(f"\n✅ No existing data found in '{output_dir}'. Starting fresh.\n")
+        return 'new'
+    
+    # Display warning
+    print("\n" + "=" * 70)
+    print("⚠️  EXISTING DATA DETECTED")
+    print("=" * 70)
+    print(f"""
+    📁 Directory: {output_dir}
+    
+    📊 Latest checkpoint: {existing['latest_file'].split('/')[-1]}
+       Date: {existing['file_date'].strftime('%Y-%m-%d %H:%M:%S')} ({existing['days_ago']} days ago)
+       Trials: {existing['n_trials']:,}
+    
+    📂 Total files found:
+       - Checkpoint files: {existing['n_checkpoints']}
+       - Final files: {existing['n_finals']}
+       - Total .pkl: {existing['total_pkl']}
+       - Total .csv: {existing['total_csv']}
+       - Total .json: {existing['total_json']}
+    """)
+    
+    print("=" * 70)
+    print("""
+    OPTIONS:
+    
+    [C] CONTINUE - Resume from the last checkpoint
+                   (Use this if you want to complete an interrupted experiment)
+    
+    [N] NEW      - Start a completely new experiment
+                   (Old files will be moved to '{output_dir}/archived_YYYYMMDD_HHMMSS/')
+    
+    [D] DIFFERENT FOLDER - Start new experiment in a different folder
+                   (Keep existing data untouched)
+    
+    [Q] QUIT     - Exit without doing anything
+    """)
+    print("=" * 70)
+    
+    while True:
+        choice = input("\n    Your choice [C/N/D/Q]: ").strip().upper()
+        
+        if choice == 'C':
+            print("\n✅ Continuing from existing checkpoint...\n")
+            return 'continue'
+        
+        elif choice == 'N':
+            # Archive old files
+            archive_dir = archive_existing_data(output_dir)
+            print(f"\n✅ Old data archived to: {archive_dir}")
+            print("   Starting new experiment...\n")
+            return 'new'
+        
+        elif choice == 'D':
+            new_folder = input("\n    Enter new folder name: ").strip()
+            if new_folder:
+                print(f"\n✅ Will use folder: {new_folder}\n")
+                return f'folder:{new_folder}'
+            else:
+                print("    ❌ Invalid folder name. Try again.")
+        
+        elif choice == 'Q':
+            print("\n👋 Exiting. No changes made.\n")
+            return 'quit'
+        
+        else:
+            print(f"    ❌ Invalid choice '{choice}'. Please enter C, N, D, or Q.")
+
+
+def archive_existing_data(output_dir: str) -> str:
+    """Move all existing data files to an archive subfolder"""
+    
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    archive_dir = f"{output_dir}/archived_{timestamp}"
+    
+    # Create archive directory
+    os.makedirs(archive_dir, exist_ok=True)
+    
+    # Move all data files
+    patterns = ['*.pkl', '*.csv', '*.json']
+    moved_count = 0
+    
+    for pattern in patterns:
+        for filepath in glob.glob(f"{output_dir}/{pattern}"):
+            filename = os.path.basename(filepath)
+            dest = f"{archive_dir}/{filename}"
+            shutil.move(filepath, dest)
+            moved_count += 1
+    
+    logging.info(f"Archived {moved_count} files to {archive_dir}")
+    
+    return archive_dir
+
     
 class ExperimentManager:
     """Main experiment manager with OpenRouter-only API"""
     
-    def __init__(self, config: ExperimentConfig):
+    def __init__(self, config: ExperimentConfig, start_fresh: bool = False):
         self.config = config
         self.session = None
         self.results = []
         self.completed_trials = 0
         self.failed_trials = 0
+        self.start_fresh = start_fresh
         
         # Create output directory
         Path(self.config.output_dir).mkdir(exist_ok=True)
@@ -85,9 +239,16 @@ class ExperimentManager:
         logging.info(f"Initialized experiment with {len(self.experimental_conditions)} conditions")
         logging.info(f"Models to test: {self.config.models}")
         logging.info(f"Total expected API calls: {len(self.experimental_conditions)}")
+        logging.info(f"Start fresh mode: {self.start_fresh}")
     
     def _load_checkpoint(self) -> Tuple[List[TrialResult], int]:
         """Load most recent checkpoint if available"""
+        
+        # If start_fresh is True, skip checkpoint loading
+        if self.start_fresh:
+            logging.info("Start fresh mode enabled - skipping checkpoint loading")
+            return [], 0
+        
         try:
             checkpoint_pattern = f"{self.config.output_dir}/results_raw_*_checkpoint_*.pkl"
             checkpoint_files = glob.glob(checkpoint_pattern)
@@ -670,7 +831,7 @@ REASONING: [Analysis]"""
         logging.info("Starting AI Marketing Influence Experiment (OpenRouter Only)")
         
         try:
-            # Load checkpoint if available
+            # Load checkpoint if available (respects start_fresh flag)
             self.results, self.completed_trials = self._load_checkpoint()
             
             # Get remaining conditions
@@ -790,11 +951,28 @@ REASONING: [Analysis]"""
 
 
 def setup_experiment():
-    """Setup for the experiment with your original 3 models"""
+    """Setup for the experiment with checkpoint handling"""
     print("=" * 60)
     print("AI Marketing Influence Experiment Setup (OpenRouter Only)")
     print("LLMs as the Gatekeeper - Marketing Science Paper")
     print("=" * 60)
+    
+    # Default output directory
+    default_output_dir = "experiment_results"
+    
+    # Check for existing data FIRST
+    action = handle_existing_data(default_output_dir)
+    
+    if action == 'quit':
+        return None
+    
+    # Handle folder change
+    if action.startswith('folder:'):
+        default_output_dir = action.split(':')[1]
+        print(f"📁 Using output directory: {default_output_dir}")
+    
+    # Determine if we should start fresh
+    start_fresh = (action == 'new' or action.startswith('folder:'))
     
     # Get API key
     api_key = input("\nEnter your OpenRouter API key: ").strip()
@@ -824,6 +1002,8 @@ def setup_experiment():
     total_trials = total_conditions * trials_per_condition
     
     print(f"\nExperiment summary:")
+    print(f"  Output directory: {default_output_dir}")
+    print(f"  Start fresh: {start_fresh}")
     print(f"  Products: 6 (3 utilitarian, 3 hedonic)")
     print(f"  Conditions: 5 (control, authority, social_proof, scarcity, reciprocity)")
     print(f"  Models: {len(selected_models)}")
@@ -844,20 +1024,22 @@ def setup_experiment():
         models=selected_models,
         trials_per_condition=trials_per_condition,
         batch_size=batch_size,
-        max_workers=max_workers
+        max_workers=max_workers,
+        output_dir=default_output_dir
     )
     
-    return config
+    return config, start_fresh
 
 
 async def main():
     """Main function to run the experiment"""
     try:
-        config = setup_experiment()
-        if not config:
+        result = setup_experiment()
+        if not result:
             return
         
-        manager = ExperimentManager(config)
+        config, start_fresh = result
+        manager = ExperimentManager(config, start_fresh=start_fresh)
         await manager.run_experiment()
         
     except Exception as e:
@@ -869,7 +1051,8 @@ if __name__ == "__main__":
     import nest_asyncio
     nest_asyncio.apply()
     
-    config = setup_experiment()
-    if config:
-        manager = ExperimentManager(config)
+    result = setup_experiment()
+    if result:
+        config, start_fresh = result
+        manager = ExperimentManager(config, start_fresh=start_fresh)
         asyncio.get_event_loop().run_until_complete(manager.run_experiment())
