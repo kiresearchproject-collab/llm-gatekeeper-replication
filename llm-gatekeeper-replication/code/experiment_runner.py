@@ -120,21 +120,21 @@ def handle_existing_data(output_dir: str) -> str:
     existing = check_existing_data(output_dir)
     
     if not existing:
-        print(f"\n✅ No existing data found in '{output_dir}'. Starting fresh.\n")
+        print(f"\n No existing data found in '{output_dir}'. Starting fresh.\n")
         return 'new'
     
     # Display warning
     print("\n" + "=" * 70)
-    print("⚠️  EXISTING DATA DETECTED")
+    print(" EXISTING DATA DETECTED")
     print("=" * 70)
     print(f"""
-    📁 Directory: {output_dir}
+    Directory: {output_dir}
     
-    📊 Latest checkpoint: {existing['latest_file'].split('/')[-1]}
+    Latest checkpoint: {existing['latest_file'].split('/')[-1]}
        Date: {existing['file_date'].strftime('%Y-%m-%d %H:%M:%S')} ({existing['days_ago']} days ago)
        Trials: {existing['n_trials']:,}
     
-    📂 Total files found:
+    Total files found:
        - Checkpoint files: {existing['n_checkpoints']}
        - Final files: {existing['n_finals']}
        - Total .pkl: {existing['total_pkl']}
@@ -163,30 +163,30 @@ def handle_existing_data(output_dir: str) -> str:
         choice = input("\n    Your choice [C/N/D/Q]: ").strip().upper()
         
         if choice == 'C':
-            print("\n✅ Continuing from existing checkpoint...\n")
+            print("\n Continuing from existing checkpoint...\n")
             return 'continue'
         
         elif choice == 'N':
             # Archive old files
             archive_dir = archive_existing_data(output_dir)
-            print(f"\n✅ Old data archived to: {archive_dir}")
+            print(f"\n Old data archived to: {archive_dir}")
             print("   Starting new experiment...\n")
             return 'new'
         
         elif choice == 'D':
             new_folder = input("\n    Enter new folder name: ").strip()
             if new_folder:
-                print(f"\n✅ Will use folder: {new_folder}\n")
+                print(f"\n Will use folder: {new_folder}\n")
                 return f'folder:{new_folder}'
             else:
-                print("    ❌ Invalid folder name. Try again.")
+                print("    Invalid folder name. Try again.")
         
         elif choice == 'Q':
-            print("\n👋 Exiting. No changes made.\n")
+            print("\n Exiting. No changes made.\n")
             return 'quit'
         
         else:
-            print(f"    ❌ Invalid choice '{choice}'. Please enter C, N, D, or Q.")
+            print(f"     Invalid choice '{choice}'. Please enter C, N, D, or Q.")
 
 
 def archive_existing_data(output_dir: str) -> str:
@@ -969,7 +969,7 @@ def setup_experiment():
     # Handle folder change
     if action.startswith('folder:'):
         default_output_dir = action.split(':')[1]
-        print(f"📁 Using output directory: {default_output_dir}")
+        print(f" Using output directory: {default_output_dir}")
     
     # Determine if we should start fresh
     start_fresh = (action == 'new' or action.startswith('folder:'))
