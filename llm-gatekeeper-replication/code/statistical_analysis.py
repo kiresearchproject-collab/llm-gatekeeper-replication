@@ -2,7 +2,7 @@
 STATISTICAL ANALYSIS - LLMs as the Gatekeeper
 ==============================================
 This script performs all statistical analyses reported in the paper
-"LLMs as the Gatekeeper: Testing Persuasive Principles in AI Purchase Recommendations"
+"Decision Gatekeepers: How Hedonic vs. Utilitarian Products Reverse Persuasion Effects in LLM-Mediated Recommendations"
 
 USAGE:
     python statistical_analysis.py
