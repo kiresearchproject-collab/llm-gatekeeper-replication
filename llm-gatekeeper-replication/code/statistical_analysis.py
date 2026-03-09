@@ -2,7 +2,8 @@
 STATISTICAL ANALYSIS - LLMs as the Gatekeeper
 ==============================================
 This script performs all statistical analyses reported in the paper
-"Decision Gatekeepers: How Hedonic vs. Utilitarian Products Reverse Persuasion Effects in LLM-Mediated Recommendations"
+"Decision Gatekeepers: How Hedonic vs. Utilitarian Products Shape
+Differential Persuasion Effects in LLM-Mediated Recommendations"
 
 USAGE:
     python statistical_analysis.py
@@ -18,13 +19,29 @@ import pandas as pd
 import numpy as np
 from scipy import stats
 from scipy.stats import f_oneway, ttest_ind
+import statsmodels.formula.api as smf
+from statsmodels.stats.anova import anova_lm
 import warnings
 warnings.filterwarnings('ignore')
 
 # ============================================================================
 # CONFIGURATION
 # ============================================================================
-FILE_PATH = "data/llm_gatekeeper_dataset.csv"
+FILE_PATH = "../data/llm_gatekeeper_dataset.csv"
+
+# ============================================================================
+# UTILITY FUNCTIONS
+# ============================================================================
+
+def compute_eta_squared(anova_table, effect_name):
+    """
+    Compute eta-squared: SS_effect / (SS_effect + SS_residual).
+    Excludes the Intercept SS which inflates the denominator in Type III.
+    """
+    ss_effect = anova_table.loc[effect_name, 'sum_sq']
+    ss_resid = anova_table.loc['Residual', 'sum_sq']
+    return ss_effect / (ss_effect + ss_resid)
+
 
 # ============================================================================
 # DATA LOADING
@@ -38,6 +55,11 @@ def load_data(file_path):
     print("=" * 80)
     
     df = pd.read_csv(file_path)
+    
+    # Ensure string columns use 'object' dtype for statsmodels/patsy compatibility
+    for col in df.select_dtypes(include=['string']).columns:
+        df[col] = df[col].astype(object)
+    
     print(f"\n Dataset loaded: {len(df):,} observations")
     
     # Show conditions
@@ -128,19 +150,16 @@ def verify_section_4_2(df):
     # --- MAIN ANOVA ---
     print("\n MAIN ANOVA (Effect of Condition):")
     
-    groups = [df[df['influence_condition'] == cond]['certainty'].values 
-              for cond in df['influence_condition'].unique()]
+    # Use statsmodels Type III for consistency with full model
+    model = smf.ols('certainty ~ C(influence_condition)', data=df).fit()
+    anova_table = anova_lm(model, typ=3)
     
-    f_stat, p_val = f_oneway(*groups)
+    f_stat = anova_table.loc['C(influence_condition)', 'F']
+    p_val = anova_table.loc['C(influence_condition)', 'PR(>F)']
+    eta_squared = compute_eta_squared(anova_table, 'C(influence_condition)')
     
-    # Calculate η²
-    grand_mean = df['certainty'].mean()
-    ss_between = sum(len(g) * (g.mean() - grand_mean)**2 for g in groups)
-    ss_total = ((df['certainty'] - grand_mean)**2).sum()
-    eta_squared = ss_between / ss_total
-    
-    df_between = len(groups) - 1
-    df_within = len(df) - len(groups)
+    df_between = int(anova_table.loc['C(influence_condition)', 'df'])
+    df_within = int(anova_table.loc['Residual', 'df'])
     
     print(f"   F({df_between}, {df_within}) = {f_stat:.3f}")
     print(f"   p < 0.001" if p_val < 0.001 else f"   p = {p_val:.6f}")
@@ -247,9 +266,6 @@ def verify_section_4_3(df):
     # --- INTERACTION ANOVA ---
     print("\n INTERACTION TEST (Condition × Category):")
     
-    import statsmodels.formula.api as smf
-    from statsmodels.stats.anova import anova_lm
-    
     formula = "certainty ~ C(influence_condition, Treatment('control')) * C(category, Treatment('utilitarian'))"
     model = smf.ols(formula, data=df).fit()
     anova_table = anova_lm(model, typ=3)
@@ -263,8 +279,12 @@ def verify_section_4_3(df):
     df_num = int(interaction_row['df'])
     df_denom = int(anova_table.loc['Residual', 'df'])
     
+    # Compute η² for interaction
+    eta_sq_interaction = compute_eta_squared(anova_table, interaction_key)
+    
     print(f"   F({df_num}, {df_denom}) = {f_interaction:.3f}")
     print(f"   p < 0.001" if p_interaction < 0.001 else f"   p = {p_interaction:.6f}")
+    print(f"   η² = {eta_sq_interaction:.3f}")
     
     # --- EFFECTS BY CATEGORY ---
     print("\n EFFECTS BY PRODUCT CATEGORY:")
@@ -329,10 +349,24 @@ def verify_section_4_4(df):
     print("SECTION 4.4: MODEL-SPECIFIC DIFFERENCES")
     print("=" * 80)
     
-    # --- BASELINE BY MODEL ---
-    print("\n BASELINE CERTAINTY BY MODEL (control only):")
+    # --- BETWEEN-MODEL ANOVA (all data) ---
+    print("\n BETWEEN-MODEL ANOVA:")
     
-    baseline_data = df[df['influence_condition'] == 'control']
+    model_anova = smf.ols('certainty ~ C(model_clean)', data=df).fit()
+    anova_table = anova_lm(model_anova, typ=3)
+    
+    f_model = anova_table.loc['C(model_clean)', 'F']
+    p_model = anova_table.loc['C(model_clean)', 'PR(>F)']
+    eta_sq_model = compute_eta_squared(anova_table, 'C(model_clean)')
+    df_num = int(anova_table.loc['C(model_clean)', 'df'])
+    df_denom = int(anova_table.loc['Residual', 'df'])
+    
+    print(f"   F({df_num}, {df_denom}) = {f_model:.3f}")
+    print(f"   p < 0.001" if p_model < 0.001 else f"   p = {p_model:.6f}")
+    print(f"   η² = {eta_sq_model:.3f}")
+    
+    # --- CERTAINTY BY MODEL (all conditions) ---
+    print("\n CERTAINTY BY MODEL (all conditions):")
     
     models = ['gpt-4.1-mini', 'gpt-5-mini', 'kimi-k2-0905']
     
@@ -342,7 +376,7 @@ def verify_section_4_4(df):
     model_stats = {}
     
     for model in models:
-        model_data = baseline_data[baseline_data['model_clean'] == model]['certainty']
+        model_data = df[df['model_clean'] == model]['certainty']
         mean = model_data.mean()
         sd = model_data.std()
         n = len(model_data)
@@ -352,12 +386,13 @@ def verify_section_4_4(df):
         print(f"   {model:<20} {mean:>8.2f} {sd:>8.2f} {n:>8}")
     
     # --- COHEN'S D BETWEEN MODELS ---
-    print("\n📊 COHEN'S D BETWEEN MODELS:")
+    print("\n COHEN'S D BETWEEN MODELS:")
     
-    gpt41 = baseline_data[baseline_data['model_clean'] == 'gpt-4.1-mini']['certainty']
-    gpt5 = baseline_data[baseline_data['model_clean'] == 'gpt-5-mini']['certainty']
+    gpt41 = df[df['model_clean'] == 'gpt-4.1-mini']['certainty']
+    gpt5 = df[df['model_clean'] == 'gpt-5-mini']['certainty']
     
-    pooled_sd = np.sqrt((gpt41.std()**2 + gpt5.std()**2) / 2)
+    n1, n2 = len(gpt41), len(gpt5)
+    pooled_sd = np.sqrt(((n1-1)*gpt41.var(ddof=1) + (n2-1)*gpt5.var(ddof=1)) / (n1+n2-2))
     cohens_d = (gpt41.mean() - gpt5.mean()) / pooled_sd
     
     print(f"   GPT-4.1 Mini vs GPT-5 Mini: d = {cohens_d:.3f}")
@@ -370,13 +405,11 @@ def verify_section_4_4(df):
 # ============================================================================
 
 def verify_section_4_5(df):
-    """Verify regression model"""
+    """Verify regression model and produce Table 2"""
     
     print("\n" + "=" * 80)
     print("SECTION 4.5: COMPREHENSIVE STATISTICAL MODEL")
     print("=" * 80)
-    
-    import statsmodels.formula.api as smf
     
     # --- FOCUSED MODEL (Condition × Category only) ---
     print("\n FOCUSED MODEL (Condition × Category):")
@@ -406,6 +439,58 @@ def verify_section_4_5(df):
     
     print(f"   R² = {r2_full:.3f}")
     print(f"   F = {f_full:.3f}")
+    
+    # --- TABLE 2: ANOVA SUMMARY ---
+    print("\n TABLE 2: ANOVA SUMMARY (Full Model):")
+    
+    # The paper reports each factor's F, df, and η² from its own ANOVA
+    # (one-way for Condition and LLM Type, two-way for Category and Interaction),
+    # with the full model R² reported separately.
+    
+    # Condition: one-way ANOVA (Section 4.2)
+    model_cond = smf.ols('certainty ~ C(influence_condition)', data=df).fit()
+    anova_cond = anova_lm(model_cond, typ=3)
+    
+    # LLM Type: one-way ANOVA (Section 4.4)
+    model_llm = smf.ols('certainty ~ C(model_clean)', data=df).fit()
+    anova_llm = anova_lm(model_llm, typ=3)
+    
+    # Interaction: two-way ANOVA (Section 4.3)
+    formula_int = "certainty ~ C(influence_condition, Treatment('control')) * C(category, Treatment('utilitarian'))"
+    model_int = smf.ols(formula_int, data=df).fit()
+    anova_int = anova_lm(model_int, typ=3)
+    interaction_key_t2 = "C(influence_condition, Treatment('control')):C(category, Treatment('utilitarian'))"
+    
+    # Category: from full model (controlling for LLM Type, Section 4.5)
+    formula_full_t2 = "certainty ~ C(influence_condition) * C(category) + C(model_clean)"
+    model_full_t2 = smf.ols(formula_full_t2, data=df).fit()
+    anova_full_t2 = anova_lm(model_full_t2, typ=3)
+    
+    # Build table rows: (paper_label, anova_table, effect_key)
+    table2_rows = [
+        ('Condition',        anova_cond,    'C(influence_condition)'),
+        ('Category',         anova_full_t2, 'C(category)'),
+        ('LLM Type',         anova_llm,     'C(model_clean)'),
+        ('Cond. × Category', anova_int,     interaction_key_t2),
+    ]
+    
+    print(f"\n   {'Source':<30} {'df':>8} {'F':>12} {'p':>12} {'η²':>8}")
+    print(f"   {'-'*75}")
+    
+    for paper_label, anova_tbl, effect_key in table2_rows:
+        row = anova_tbl.loc[effect_key]
+        f_val = row['F']
+        p_val = row['PR(>F)']
+        df_effect = int(row['df'])
+        df_resid = int(anova_tbl.loc['Residual', 'df'])
+        eta_sq = compute_eta_squared(anova_tbl, effect_key)
+        
+        sig = "***" if p_val < 0.001 else "**" if p_val < 0.01 else "*" if p_val < 0.05 else "ns"
+        p_str = "< 0.001" if p_val < 0.001 else f"  {p_val:.3f}"
+        
+        print(f"   {paper_label:<30} {df_effect:>3}, {df_resid:>5} {f_val:>12.3f} {p_str:>12} {eta_sq:>8.3f} {sig}")
+    
+    print(f"\n   Full model R² = {r2_full:.3f}, F = {f_full:.3f}, p < 0.001")
     
     # --- INTERACTION COEFFICIENTS ---
     print("\n INTERACTION COEFFICIENTS (Condition × Hedonic):")
@@ -477,9 +562,13 @@ def verify_section_4_6(df):
     social_rate = (concert_social['certainty'] >= 8.5).mean()
     change = social_rate - baseline_rate
     
-    print(f"   Baseline: {baseline_rate:.1%}")
-    print(f"   After Social Proof: {social_rate:.1%}")
+    baseline_mean = concert_baseline['certainty'].mean()
+    social_mean = concert_social['certainty'].mean()
+    
+    print(f"   Baseline rate: {baseline_rate:.1%}")
+    print(f"   After Social Proof rate: {social_rate:.1%}")
     print(f"   Change: {change:+.1%} ({change*100:+.1f} percentage points)")
+    print(f"   Mean certainty: {baseline_mean:.2f} → {social_mean:.2f}")
     
     return {
         'concert_baseline': baseline_rate,
@@ -591,15 +680,15 @@ def main():
     
     print("\n" + "=" * 80)
     print("STATISTICAL ANALYSIS")
-    print("LLMs as the Gatekeeper: Testing Persuasive Principles")
-    print("in AI Purchase Recommendations")
+    print("Decision Gatekeepers: How Hedonic vs. Utilitarian Products Shape")
+    print("Differential Persuasion Effects in LLM-Mediated Recommendations")
     print("=" * 80)
     
     # Load data
     try:
         df = load_data(FILE_PATH)
     except FileNotFoundError:
-        print(f"\n❌ ERROR: File not found:")
+        print(f"\n ERROR: File not found:")
         print(f"   {FILE_PATH}")
         print(f"\nPlease ensure the dataset is in the correct location.")
         return
