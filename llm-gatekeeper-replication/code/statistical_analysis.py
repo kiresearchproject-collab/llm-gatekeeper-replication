@@ -20,7 +20,7 @@ from statsmodels.stats.anova import anova_lm
 import warnings
 warnings.filterwarnings('ignore')
 
-FILE_PATH = "data/llm_gatekeeper_dataset.csv"
+FILE_PATH = "../data/llm_gatekeeper_dataset.csv"
 
 def compute_eta_squared(anova_table, effect_name):
     """Compute eta-squared: SS_effect / (SS_effect + SS_residual)."""
